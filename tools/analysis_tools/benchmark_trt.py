@@ -15,7 +15,7 @@ except ImportError:
     from mmdet3d.utils import compat_cfg
 
 import argparse
-
+from mmcv import Config, DictAction
 from mmdet3d.core import bbox3d2result
 from mmdet3d.core.bbox.structures.box_3d_mode import LiDARInstance3DBoxes
 from mmdet3d.datasets import build_dataloader, build_dataset
@@ -26,8 +26,28 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Deploy BEVDet with Tensorrt')
     parser.add_argument('config', help='deploy config file path')
     parser.add_argument('engine', help='checkpoint file')
-    parser.add_argument('--samples', default=500, help='samples to benchmark')
+    parser.add_argument('--samples', default=80, help='samples to benchmark')
     parser.add_argument('--postprocessing', action='store_true')
+    parser.add_argument(
+        '--format-only',
+        action='store_true',
+        help='Format the output results without perform evaluation. It is'
+             'useful when you want to format the result to a specific format and '
+             'submit it to the test server')
+
+    parser.add_argument(
+        '--eval',
+        type=str,
+        nargs='+',
+        help='evaluation metrics, which depends on the dataset, e.g., "bbox",'
+             ' "segm", "proposal" for COCO, and "mAP", "recall" for PASCAL VOC')
+
+    parser.add_argument(
+        '--eval-options',
+        nargs='+',
+        action=DictAction,
+        help='custom options for evaluation, the key-value pair in xxx=yyy '
+             'format will be kwargs for dataset.evaluate() function')
     args = parser.parse_args()
     return args
 
@@ -135,11 +155,12 @@ def main():
     # build tensorrt model
     trt_model = TRTWrapper(args.engine, [f'output_{i}' for i in range(36)])
 
-    num_warmup = 50
+    num_warmup = 5
     pure_inf_time = 0
 
     init_ = True
     metas = dict()
+    outputs = []
     # benchmark with several samples and take the average
     for i, data in enumerate(data_loader):
         if init_:
@@ -153,7 +174,10 @@ def main():
                 interval_lengths=metas_[4].int().contiguous())
             init_ = False
         img = data['img_inputs'][0][0].cuda().squeeze(0).contiguous()
+
+
         torch.cuda.synchronize()
+
         start_time = time.perf_counter()
         trt_output = trt_model.forward(dict(img=img, **metas))
 
@@ -168,12 +192,15 @@ def main():
                 bbox3d2result(bboxes, scores, labels)
                 for bboxes, scores, labels in bbox_list
             ]
+            result_dict = {}
+            result_dict['pts_bbox'] = bbox_results[0]
+            outputs.append(result_dict)
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - start_time
 
         if i >= num_warmup:
             pure_inf_time += elapsed
-            if (i + 1) % 50 == 0:
+            if (i + 1) % 5 == 0:
                 fps = (i + 1 - num_warmup) / pure_inf_time
                 print(f'Done image [{i + 1:<3}/ {args.samples}], '
                       f'fps: {fps:.1f} img / s')
@@ -183,8 +210,21 @@ def main():
             fps = (i + 1 - num_warmup) / pure_inf_time
             print(f'Overall \nfps: {fps:.1f} img / s '
                   f'\ninference time: {1000/fps:.1f} ms')
-            return fps
-
+            # return fps
+    kwargs = {} if args.eval_options is None else args.eval_options
+    if args.format_only:
+        dataset.format_results(outputs, **kwargs)
+    if args.eval:
+        eval_kwargs = cfg.get('evaluation', {}).copy()
+        # hard-code way to remove EvalHook args
+        for key in [
+            'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+            'rule'
+        ]:
+            eval_kwargs.pop(key, None)
+        eval_kwargs.update(dict(metric=args.eval, **kwargs))
+        print(dataset.evaluate(outputs, **eval_kwargs))
 
 if __name__ == '__main__':
     fps = main()
+

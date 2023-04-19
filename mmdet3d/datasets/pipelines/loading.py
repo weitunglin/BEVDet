@@ -934,18 +934,6 @@ class PrepareImageInputs(object):
         sweepsensor2keyego = \
             global2keyego @ sweepego2global @ sweepsensor2sweepego
 
-        # global sensor to cur ego
-        w, x, y, z = key_info['cams'][cam_name]['ego2global_rotation']
-        keyego2global_rot = torch.Tensor(
-            Quaternion(w, x, y, z).rotation_matrix)
-        keyego2global_tran = torch.Tensor(
-            key_info['cams'][cam_name]['ego2global_translation'])
-        keyego2global = keyego2global_rot.new_zeros((4, 4))
-        keyego2global[3, 3] = 1
-        keyego2global[:3, :3] = keyego2global_rot
-        keyego2global[:3, -1] = keyego2global_tran
-        global2keyego = keyego2global.inverse()
-
         # cur ego to sensor
         w, x, y, z = key_info['cams'][cam_name]['sensor2ego_rotation']
         keysensor2keyego_rot = torch.Tensor(
@@ -982,13 +970,19 @@ class PrepareImageInputs(object):
 
             intrin = torch.Tensor(cam_data['cam_intrinsic'])
 
-            sensor2keyego, sensor2sensor = \
-                self.get_sensor2ego_transformation(results['curr'],
-                                                   results['curr'],
-                                                   cam_name,
-                                                   self.ego_cam)
-            rot = sensor2keyego[:3, :3]
-            tran = sensor2keyego[:3, 3]
+            if self.ego_cam == 'CAM_FRONT':
+                sensor2keyego, sensor2sensor = \
+                    self.get_sensor2ego_transformation(results['curr'],
+                                                    results['curr'],
+                                                    cam_name,
+                                                    self.ego_cam)
+                rot = sensor2keyego[:3, :3]
+                tran = sensor2keyego[:3, 3]
+            elif self.ego_cam == 'image_front_bottom_60':
+                rot = torch.Tensor(results['curr']['cams'][cam_name]['sensor2lidar_rotation'])
+                tran = torch.Tensor(results['curr']['cams'][cam_name]['sensor2lidar_translation'])
+                sensor2sensor = torch.Tensor(np.eye(4))
+
             # image view augmentation (resize, crop, horizontal flip, rotate)
             img_augs = self.sample_augmentation(
                 H=img.height, W=img.width, flip=flip, scale=scale)
@@ -1127,6 +1121,7 @@ class LoadAnnotationsBEVDepth(object):
 
     def __call__(self, results):
         gt_boxes, gt_labels = results['ann_infos']
+        gt_boxes, gt_labels = np.array(gt_boxes), np.array(gt_labels)
         gt_boxes, gt_labels = torch.Tensor(gt_boxes), torch.tensor(gt_labels)
         rotate_bda, scale_bda, flip_dx, flip_dy = self.sample_bda_augmentation(
         )

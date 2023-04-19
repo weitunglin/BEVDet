@@ -104,10 +104,13 @@ RUN pip install pycuda \
     lyft_dataset_sdk \
     networkx==2.2 \
     numba==0.53.0 \
-    numpy \
+    numpy==1.23 \
     nuscenes-devkit \
     plyfile \
     scikit-image \
     tensorboard \
     trimesh==2.35.39 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
+RUN apt-get clean && apt-get update &&\
+    apt-get install -y tmux htop &&\
+    rm -rf /var/lib/apt/lists/*
