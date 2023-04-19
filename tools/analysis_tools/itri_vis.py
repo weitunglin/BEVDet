@@ -216,12 +216,9 @@ def main():
             img = cv2.imread(infos['cams'][view]['data_path'])
             # draw instances
             corners_img, valid = lidar2img(corners_lidar, infos['cams'][view])
-            print(corners_img)
-            print(valid)
             valid = np.logical_and(
                 valid,
                 check_point_in_img(corners_img, img.shape[0], img.shape[1]))
-            print(valid)
             valid = valid.reshape(-1, 8)
             corners_img = corners_img.reshape(-1, 8, 2).astype(np.int)
             for aid in range(valid.shape[0]):
