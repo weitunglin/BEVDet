@@ -1,4 +1,49 @@
 # Copyright (c) Phigent Robotics. All rights reserved.
+# align_after_view_transfromation=True
+# mAP: 0.3479
+# mATE: 0.6176
+# mASE: 0.2849
+# mAOE: 0.5316
+# mAVE: 0.2911
+# mAAE: 0.1927
+# NDS: 0.4822
+# Eval time: 128.6s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.564	0.449	0.158	0.085	0.261	0.197
+# truck	0.277	0.614	0.213	0.136	0.253	0.202
+# bus	0.316	0.666	0.226	0.112	0.634	0.319
+# trailer	0.135	0.978	0.244	0.588	0.188	0.053
+# construction_vehicle	0.094	0.713	0.495	1.145	0.115	0.376
+# pedestrian	0.396	0.709	0.304	0.661	0.373	0.186
+# motorcycle	0.343	0.619	0.268	0.760	0.374	0.205
+# bicycle	0.260	0.615	0.282	1.182	0.132	0.003
+# traffic_cone	0.551	0.411	0.350	nan	nan	nan
+# barrier	0.542	0.403	0.310	0.114	nan	nan
+
+# align_after_view_transfromation=False
+# mAP: 0.3536
+# mATE: 0.6067
+# mASE: 0.2841
+# mAOE: 0.5252
+# mAVE: 0.2856
+# mAAE: 0.1932
+# NDS: 0.4873
+# Eval time: 135.0s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.571	0.435	0.157	0.084	0.252	0.197
+# truck	0.283	0.596	0.213	0.132	0.245	0.204
+# bus	0.318	0.669	0.224	0.102	0.612	0.322
+# trailer	0.139	0.986	0.243	0.575	0.186	0.049
+# construction_vehicle	0.097	0.695	0.488	1.107	0.114	0.383
+# pedestrian	0.402	0.701	0.304	0.662	0.371	0.188
+# motorcycle	0.352	0.601	0.271	0.757	0.372	0.199
+# bicycle	0.266	0.598	0.282	1.195	0.131	0.003
+# traffic_cone	0.557	0.398	0.348	nan	nan	nan
+# barrier	0.552	0.390	0.310	0.113	nan	nan
 
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
@@ -61,7 +106,7 @@ model = dict(
     img_neck=dict(
         type='CustomFPN',
         in_channels=[1024, 2048],
-        out_channels=512,
+        out_channels=256,
         num_outs=1,
         start_level=0,
         out_ids=[0]),
@@ -69,7 +114,7 @@ model = dict(
         type='LSSViewTransformer',
         grid_config=grid_config,
         input_size=data_config['input_size'],
-        in_channels=512,
+        in_channels=256,
         out_channels=numC_Trans,
         downsample=16),
     img_bev_encoder_backbone=dict(
@@ -91,12 +136,12 @@ model = dict(
         type='CenterHead',
         in_channels=256,
         tasks=[
-            dict(num_class=1, class_names=['car']),
-            dict(num_class=2, class_names=['truck', 'construction_vehicle']),
-            dict(num_class=2, class_names=['bus', 'trailer']),
-            dict(num_class=1, class_names=['barrier']),
-            dict(num_class=2, class_names=['motorcycle', 'bicycle']),
-            dict(num_class=2, class_names=['pedestrian', 'traffic_cone']),
+            dict(num_class=10, class_names=['car', 'truck',
+                                            'construction_vehicle',
+                                            'bus', 'trailer',
+                                            'barrier',
+                                            'motorcycle', 'bicycle',
+                                            'pedestrian', 'traffic_cone']),
         ],
         common_heads=dict(
             reg=(2, 2), height=(1, 2), dim=(3, 2), rot=(2, 2), vel=(2, 2)),
@@ -138,16 +183,16 @@ model = dict(
             out_size_factor=8,
             voxel_size=voxel_size[:2],
             pre_max_size=1000,
-            post_max_size=83,
+            post_max_size=500,
 
             # Scale-NMS
-            nms_type=[
-                'rotate', 'rotate', 'rotate', 'circle', 'rotate', 'rotate'
-            ],
-            nms_thr=[0.2, 0.2, 0.2, 0.2, 0.2, 0.5],
-            nms_rescale_factor=[
-                1.0, [0.7, 0.7], [0.4, 0.55], 1.1, [1.0, 1.0], [4.5, 9.0]
-            ])))
+            nms_type=['rotate'],
+            nms_thr=[0.2],
+            nms_rescale_factor=[[1.0, 0.7, 0.7, 0.4, 0.55,
+                                 1.1, 1.0, 1.0, 1.5, 3.5]]
+        )
+    )
+)
 
 # Data
 dataset_type = 'NuScenesDataset'
@@ -264,7 +309,7 @@ custom_hooks = [
     ),
     dict(
         type='SequentialControlHook',
-        temporal_start_epoch=3,
+        temporal_start_epoch=2,
     ),
 ]
 

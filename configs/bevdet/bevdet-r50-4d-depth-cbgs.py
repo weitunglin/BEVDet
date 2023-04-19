@@ -1,25 +1,49 @@
 # Copyright (c) Phigent Robotics. All rights reserved.
-
-# mAP: 0.2828
-# mATE: 0.7734
-# mASE: 0.2884
-# mAOE: 0.6976
-# mAVE: 0.8637
-# mAAE: 0.2908
-# NDS: 0.3500
+# align_after_view_transfromation=True
+# mAP: 0.3605
+# mATE: 0.6189
+# mASE: 0.2739
+# mAOE: 0.4818
+# mAVE: 0.3959
+# mAAE: 0.2037
+# NDS: 0.4828
+# Eval time: 142.2s
 #
 # Per-class results:
 # Object Class	AP	ATE	ASE	AOE	AVE	AAE
-# car	0.517	0.533	0.161	0.123	0.909	0.235
-# truck	0.226	0.745	0.232	0.222	0.848	0.268
-# bus	0.305	0.797	0.220	0.192	1.982	0.355
-# trailer	0.101	1.107	0.230	0.514	0.536	0.068
-# construction_vehicle	0.039	1.105	0.501	1.402	0.119	0.386
-# pedestrian	0.318	0.805	0.305	1.341	0.826	0.650
-# motorcycle	0.216	0.783	0.286	0.977	1.224	0.273
-# bicycle	0.203	0.712	0.304	1.354	0.465	0.090
-# traffic_cone	0.499	0.547	0.347	nan	nan	nan
-# barrier	0.404	0.599	0.297	0.153	nan	nan
+# car	0.577	0.446	0.154	0.079	0.324	0.190
+# truck	0.280	0.647	0.217	0.094	0.308	0.205
+# bus	0.375	0.701	0.208	0.078	0.894	0.303
+# trailer	0.172	0.952	0.244	0.392	0.332	0.169
+# construction_vehicle	0.090	0.754	0.424	1.018	0.107	0.341
+# pedestrian	0.413	0.676	0.305	0.812	0.490	0.234
+# motorcycle	0.315	0.668	0.266	0.676	0.514	0.178
+# bicycle	0.273	0.534	0.281	1.066	0.198	0.010
+# traffic_cone	0.564	0.415	0.334	nan	nan	nan
+# barrier	0.546	0.395	0.304	0.123	nan	nan
+
+# align_after_view_transfromation=False
+# mAP: 0.3618
+# mATE: 0.6168
+# mASE: 0.2735
+# mAOE: 0.4802
+# mAVE: 0.3932
+# mAAE: 0.2033
+# NDS: 0.4842
+# Eval time: 142.2s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.577	0.445	0.154	0.079	0.320	0.190
+# truck	0.280	0.648	0.217	0.094	0.305	0.205
+# bus	0.373	0.700	0.208	0.082	0.896	0.304
+# trailer	0.172	0.951	0.243	0.390	0.329	0.169
+# construction_vehicle	0.091	0.750	0.422	1.008	0.109	0.339
+# pedestrian	0.416	0.672	0.305	0.804	0.483	0.231
+# motorcycle	0.318	0.665	0.267	0.674	0.506	0.179
+# bicycle	0.274	0.533	0.281	1.070	0.199	0.010
+# traffic_cone	0.567	0.411	0.334	nan	nan	nan
+# barrier	0.550	0.391	0.304	0.122	nan	nan
 
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
@@ -55,15 +79,19 @@ grid_config = {
     'x': [-51.2, 51.2, 0.8],
     'y': [-51.2, 51.2, 0.8],
     'z': [-5, 3, 8],
-    'depth': [1.0, 60.0, 1.0],
+    'depth': [1.0, 60.0, 0.5],
 }
 
 voxel_size = [0.1, 0.1, 0.2]
 
-numC_Trans = 64
+numC_Trans = 80
+
+multi_adj_frame_id_cfg = (1, 1+1, 1)
 
 model = dict(
-    type='BEVDet',
+    type='BEVDepth4D',
+    align_after_view_transfromation=False,
+    num_adj=len(range(*multi_adj_frame_id_cfg)),
     img_backbone=dict(
         pretrained='torchvision://resnet50',
         type='ResNet',
@@ -78,25 +106,33 @@ model = dict(
     img_neck=dict(
         type='CustomFPN',
         in_channels=[1024, 2048],
-        out_channels=256,
+        out_channels=512,
         num_outs=1,
         start_level=0,
         out_ids=[0]),
     img_view_transformer=dict(
-        type='LSSViewTransformer',
+        type='LSSViewTransformerBEVDepth',
         grid_config=grid_config,
         input_size=data_config['input_size'],
-        in_channels=256,
+        in_channels=512,
         out_channels=numC_Trans,
+        depthnet_cfg=dict(use_dcn=False, aspp_mid_channels=96),
         downsample=16),
     img_bev_encoder_backbone=dict(
         type='CustomResNet',
-        numC_input=numC_Trans,
+        numC_input=numC_Trans * (len(range(*multi_adj_frame_id_cfg))+1),
         num_channels=[numC_Trans * 2, numC_Trans * 4, numC_Trans * 8]),
     img_bev_encoder_neck=dict(
         type='FPN_LSS',
         in_channels=numC_Trans * 8 + numC_Trans * 2,
         out_channels=256),
+    pre_process=dict(
+        type='CustomResNet',
+        numC_input=numC_Trans,
+        num_layer=[2,],
+        num_channels=[numC_Trans,],
+        stride=[1,],
+        backbone_output_ids=[0,]),
     pts_bbox_head=dict(
         type='CenterHead',
         in_channels=256,
@@ -122,8 +158,8 @@ model = dict(
             code_size=9),
         separate_head=dict(
             type='SeparateHead', init_bias=-2.19, final_kernel=3),
-        loss_cls=dict(type='GaussianFocalLoss', reduction='mean'),
-        loss_bbox=dict(type='L1Loss', reduction='mean', loss_weight=0.25),
+        loss_cls=dict(type='GaussianFocalLoss', reduction='mean', loss_weight=6.),
+        loss_bbox=dict(type='L1Loss', reduction='mean', loss_weight=1.5),
         norm_bbox=True),
     # model training and testing settings
     train_cfg=dict(
@@ -136,7 +172,7 @@ model = dict(
             gaussian_overlap=0.1,
             max_objs=500,
             min_radius=2,
-            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2])),
+            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])),
     test_cfg=dict(
         pts=dict(
             pc_range=point_cloud_range[:2],
@@ -174,20 +210,29 @@ train_pipeline = [
     dict(
         type='PrepareImageInputs',
         is_train=True,
-        data_config=data_config),
+        data_config=data_config,
+        sequential=True),
     dict(
         type='LoadAnnotationsBEVDepth',
         bda_aug_conf=bda_aug_conf,
         classes=class_names),
+    dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        file_client_args=file_client_args),
+    dict(type='PointToMultiViewDepth', downsample=1, grid_config=grid_config),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectNameFilter', classes=class_names),
     dict(type='DefaultFormatBundle3D', class_names=class_names),
     dict(
-        type='Collect3D', keys=['img_inputs', 'gt_bboxes_3d', 'gt_labels_3d'])
+        type='Collect3D', keys=['img_inputs', 'gt_bboxes_3d', 'gt_labels_3d',
+                                'gt_depth'])
 ]
 
 test_pipeline = [
-    dict(type='PrepareImageInputs', data_config=data_config),
+    dict(type='PrepareImageInputs', data_config=data_config, sequential=True),
     dict(
         type='LoadAnnotationsBEVDepth',
         bda_aug_conf=bda_aug_conf,
@@ -224,7 +269,8 @@ share_data_config = dict(
     type=dataset_type,
     classes=class_names,
     modality=input_modality,
-    img_info_prototype='bevdet',
+    img_info_prototype='bevdet4d',
+    multi_adj_frame_id_cfg=multi_adj_frame_id_cfg,
 )
 
 test_data_config = dict(
@@ -235,6 +281,8 @@ data = dict(
     samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
+        type='CBGSDataset',
+        dataset=dict(
         data_root=data_root,
         ann_file=data_root + 'bevdetv2-nuscenes_infos_train.pkl',
         pipeline=train_pipeline,
@@ -243,29 +291,34 @@ data = dict(
         use_valid_flag=True,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
-        box_type_3d='LiDAR'),
+        box_type_3d='LiDAR')),
     val=test_data_config,
     test=test_data_config)
 
-for key in ['train', 'val', 'test']:
+for key in ['val', 'test']:
     data[key].update(share_data_config)
+data['train']['dataset'].update(share_data_config)
 
 # Optimizer
-optimizer = dict(type='AdamW', lr=2e-4, weight_decay=1e-07)
+optimizer = dict(type='AdamW', lr=2e-4, weight_decay=1e-2)
 optimizer_config = dict(grad_clip=dict(max_norm=5, norm_type=2))
 lr_config = dict(
     policy='step',
     warmup='linear',
     warmup_iters=200,
     warmup_ratio=0.001,
-    step=[24,])
-runner = dict(type='EpochBasedRunner', max_epochs=24)
+    step=[20,])
+runner = dict(type='EpochBasedRunner', max_epochs=20)
 
 custom_hooks = [
     dict(
         type='MEGVIIEMAHook',
         init_updates=10560,
         priority='NORMAL',
+    ),
+    dict(
+        type='SequentialControlHook',
+        temporal_start_epoch=2,
     ),
 ]
 

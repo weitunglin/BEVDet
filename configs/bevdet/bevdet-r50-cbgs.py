@@ -1,5 +1,27 @@
 # Copyright (c) Phigent Robotics. All rights reserved.
 
+# mAP: 0.3085
+# mATE: 0.7149
+# mASE: 0.2800
+# mAOE: 0.5977
+# mAVE: 0.7787
+# mAAE: 0.2300
+# NDS: 0.3941
+# Eval time: 142.1s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.523	0.510	0.157	0.104	0.837	0.212
+# truck	0.229	0.712	0.216	0.133	0.719	0.219
+# bus	0.276	0.880	0.217	0.120	1.722	0.413
+# trailer	0.155	0.993	0.231	0.367	0.427	0.179
+# construction_vehicle	0.069	0.932	0.516	1.303	0.117	0.371
+# pedestrian	0.332	0.769	0.308	1.311	0.891	0.306
+# motorcycle	0.276	0.719	0.263	0.750	1.216	0.131
+# bicycle	0.208	0.682	0.268	1.179	0.301	0.009
+# traffic_cone	0.518	0.477	0.328	nan	nan	nan
+# barrier	0.500	0.474	0.297	0.113	nan	nan
+
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
 # If point cloud range is changed, the models should also change their point
@@ -39,7 +61,7 @@ grid_config = {
 
 voxel_size = [0.1, 0.1, 0.2]
 
-numC_Trans = 80
+numC_Trans = 64
 
 model = dict(
     type='BEVDet',
@@ -57,7 +79,7 @@ model = dict(
     img_neck=dict(
         type='CustomFPN',
         in_channels=[1024, 2048],
-        out_channels=512,
+        out_channels=256,
         num_outs=1,
         start_level=0,
         out_ids=[0]),
@@ -65,7 +87,7 @@ model = dict(
         type='LSSViewTransformer',
         grid_config=grid_config,
         input_size=data_config['input_size'],
-        in_channels=512,
+        in_channels=256,
         out_channels=numC_Trans,
         downsample=16),
     img_bev_encoder_backbone=dict(
@@ -80,12 +102,12 @@ model = dict(
         type='CenterHead',
         in_channels=256,
         tasks=[
-            dict(num_class=1, class_names=['car']),
-            dict(num_class=2, class_names=['truck', 'construction_vehicle']),
-            dict(num_class=2, class_names=['bus', 'trailer']),
-            dict(num_class=1, class_names=['barrier']),
-            dict(num_class=2, class_names=['motorcycle', 'bicycle']),
-            dict(num_class=2, class_names=['pedestrian', 'traffic_cone']),
+            dict(num_class=10, class_names=['car', 'truck',
+                                            'construction_vehicle',
+                                            'bus', 'trailer',
+                                            'barrier',
+                                            'motorcycle', 'bicycle',
+                                            'pedestrian', 'traffic_cone']),
         ],
         common_heads=dict(
             reg=(2, 2), height=(1, 2), dim=(3, 2), rot=(2, 2), vel=(2, 2)),
@@ -127,16 +149,16 @@ model = dict(
             out_size_factor=8,
             voxel_size=voxel_size[:2],
             pre_max_size=1000,
-            post_max_size=83,
+            post_max_size=500,
 
             # Scale-NMS
-            nms_type=[
-                'rotate', 'rotate', 'rotate', 'circle', 'rotate', 'rotate'
-            ],
-            nms_thr=[0.2, 0.2, 0.2, 0.2, 0.2, 0.5],
-            nms_rescale_factor=[
-                1.0, [0.7, 0.7], [0.4, 0.55], 1.1, [1.0, 1.0], [4.5, 9.0]
-            ])))
+            nms_type=['rotate'],
+            nms_thr=[0.2],
+            nms_rescale_factor=[[1.0, 0.7, 0.7, 0.4, 0.55,
+                                 1.1, 1.0, 1.0, 1.5, 3.5]]
+        )
+    )
+)
 
 # Data
 dataset_type = 'NuScenesDataset'

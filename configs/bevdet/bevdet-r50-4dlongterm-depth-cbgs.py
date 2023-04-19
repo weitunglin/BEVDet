@@ -1,4 +1,49 @@
 # Copyright (c) Phigent Robotics. All rights reserved.
+# align_after_view_transfromation=True
+# mAP: 0.3940
+# mATE: 0.5789
+# mASE: 0.2812
+# mAOE: 0.4688
+# mAVE: 0.2822
+# mAAE: 0.2060
+# NDS: 0.5153
+# Eval time: 130.0s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.615	0.398	0.154	0.073	0.273	0.191
+# truck	0.323	0.542	0.210	0.092	0.240	0.215
+# bus	0.365	0.680	0.197	0.079	0.571	0.308
+# trailer	0.199	0.925	0.245	0.437	0.185	0.096
+# construction_vehicle	0.110	0.812	0.519	1.057	0.098	0.396
+# pedestrian	0.459	0.630	0.304	0.645	0.353	0.192
+# motorcycle	0.379	0.600	0.260	0.726	0.372	0.245
+# bicycle	0.316	0.466	0.275	0.987	0.166	0.004
+# traffic_cone	0.588	0.370	0.350	nan	nan	nan
+# barrier	0.585	0.367	0.299	0.124	nan	nan
+
+# align_after_view_transfromation=False
+# mAP: 0.3986
+# mATE: 0.5708
+# mASE: 0.2808
+# mAOE: 0.4629
+# mAVE: 0.2779
+# mAAE: 0.2062
+# NDS: 0.5194
+# Eval time: 135.8s
+#
+# Per-class results:
+# Object Class	AP	ATE	ASE	AOE	AVE	AAE
+# car	0.620	0.389	0.153	0.073	0.265	0.191
+# truck	0.324	0.528	0.207	0.088	0.233	0.214
+# bus	0.371	0.673	0.197	0.086	0.566	0.305
+# trailer	0.201	0.916	0.245	0.431	0.178	0.096
+# construction_vehicle	0.115	0.810	0.517	1.016	0.107	0.399
+# pedestrian	0.466	0.624	0.304	0.652	0.348	0.191
+# motorcycle	0.387	0.582	0.260	0.731	0.363	0.250
+# bicycle	0.318	0.466	0.276	0.966	0.164	0.004
+# traffic_cone	0.591	0.361	0.349	nan	nan	nan
+# barrier	0.593	0.359	0.299	0.124	nan	nan
 
 _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
@@ -71,7 +116,7 @@ model = dict(
         input_size=data_config['input_size'],
         in_channels=512,
         out_channels=numC_Trans,
-        depthnet_cfg=dict(use_dcn=False),
+        depthnet_cfg=dict(use_dcn=False, aspp_mid_channels=96),
         downsample=16),
     img_bev_encoder_backbone=dict(
         type='CustomResNet',
@@ -92,12 +137,12 @@ model = dict(
         type='CenterHead',
         in_channels=256,
         tasks=[
-            dict(num_class=1, class_names=['car']),
-            dict(num_class=2, class_names=['truck', 'construction_vehicle']),
-            dict(num_class=2, class_names=['bus', 'trailer']),
-            dict(num_class=1, class_names=['barrier']),
-            dict(num_class=2, class_names=['motorcycle', 'bicycle']),
-            dict(num_class=2, class_names=['pedestrian', 'traffic_cone']),
+            dict(num_class=10, class_names=['car', 'truck',
+                                            'construction_vehicle',
+                                            'bus', 'trailer',
+                                            'barrier',
+                                            'motorcycle', 'bicycle',
+                                            'pedestrian', 'traffic_cone']),
         ],
         common_heads=dict(
             reg=(2, 2), height=(1, 2), dim=(3, 2), rot=(2, 2), vel=(2, 2)),
@@ -113,8 +158,8 @@ model = dict(
             code_size=9),
         separate_head=dict(
             type='SeparateHead', init_bias=-2.19, final_kernel=3),
-        loss_cls=dict(type='GaussianFocalLoss', reduction='mean'),
-        loss_bbox=dict(type='L1Loss', reduction='mean', loss_weight=0.25),
+        loss_cls=dict(type='GaussianFocalLoss', reduction='mean', loss_weight=6.),
+        loss_bbox=dict(type='L1Loss', reduction='mean', loss_weight=1.5),
         norm_bbox=True),
     # model training and testing settings
     train_cfg=dict(
@@ -139,16 +184,16 @@ model = dict(
             out_size_factor=8,
             voxel_size=voxel_size[:2],
             pre_max_size=1000,
-            post_max_size=83,
+            post_max_size=500,
 
             # Scale-NMS
-            nms_type=[
-                'rotate', 'rotate', 'rotate', 'circle', 'rotate', 'rotate'
-            ],
-            nms_thr=[0.2, 0.2, 0.2, 0.2, 0.2, 0.5],
-            nms_rescale_factor=[
-                1.0, [0.7, 0.7], [0.4, 0.55], 1.1, [1.0, 1.0], [4.5, 9.0]
-            ])))
+            nms_type=['rotate'],
+            nms_thr=[0.2],
+            nms_rescale_factor=[[1.0, 0.7, 0.7, 0.4, 0.55,
+                                 1.1, 1.0, 1.0, 1.5, 3.5]]
+        )
+    )
+)
 
 # Data
 dataset_type = 'NuScenesDataset'
@@ -273,7 +318,7 @@ custom_hooks = [
     ),
     dict(
         type='SequentialControlHook',
-        temporal_start_epoch=3,
+        temporal_start_epoch=2,
     ),
 ]
 

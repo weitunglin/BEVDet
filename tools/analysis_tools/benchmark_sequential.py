@@ -48,7 +48,7 @@ def main():
     data_loader = build_dataloader(
         dataset,
         samples_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
+        workers_per_gpu=0,
         dist=False,
         shuffle=False)
 
@@ -105,7 +105,8 @@ def main():
         if (i + 1) == args.samples:
             pure_inf_time += elapsed
             fps = (i + 1 - num_warmup) / pure_inf_time
-            print(f'Overall fps: {fps:.1f} img / s')
+            print(f'Overall \nfps: {fps:.2f} img / s '
+                  f'\ninference time: {1000 / fps:.2f} ms')
             break
 
 

@@ -96,7 +96,7 @@ class LSSViewTransformer(BaseModule):
         # D x H x W x 3
         self.frustum = torch.stack((x, y, d), -1)
 
-    def get_lidar_coor(self, rots, trans, cam2imgs, post_rots, post_trans,
+    def get_lidar_coor(self, sensor2ego, ego2global, cam2imgs, post_rots, post_trans,
                        bda):
         """Calculate the locations of the frustum points in the lidar
         coordinate system.
@@ -118,20 +118,20 @@ class LSSViewTransformer(BaseModule):
             torch.tensor: Point coordinates in shape
                 (B, N_cams, D, ownsample, 3)
         """
-        B, N, _ = trans.shape
+        B, N, _, _ = sensor2ego.shape
 
         # post-transformation
         # B x N x D x H x W x 3
-        points = self.frustum.to(rots) - post_trans.view(B, N, 1, 1, 1, 3)
+        points = self.frustum.to(sensor2ego) - post_trans.view(B, N, 1, 1, 1, 3)
         points = torch.inverse(post_rots).view(B, N, 1, 1, 1, 3, 3)\
             .matmul(points.unsqueeze(-1))
 
         # cam_to_ego
         points = torch.cat(
             (points[..., :2, :] * points[..., 2:3, :], points[..., 2:3, :]), 5)
-        combine = rots.matmul(torch.inverse(cam2imgs))
+        combine = sensor2ego[:,:,:3,:3].matmul(torch.inverse(cam2imgs))
         points = combine.view(B, N, 1, 1, 1, 3, 3).matmul(points).squeeze(-1)
-        points += trans.view(B, N, 1, 1, 1, 3)
+        points += sensor2ego[:,:,:3, 3].view(B, N, 1, 1, 1, 3)
         points = bda.view(B, 1, 1, 1, 1, 3,
                           3).matmul(points.unsqueeze(-1)).squeeze(-1)
         return points
@@ -378,8 +378,8 @@ class ASPP(nn.Module):
             nn.ReLU(),
         )
         self.conv1 = nn.Conv2d(
-            int(mid_channels * 5), mid_channels, 1, bias=False)
-        self.bn1 = BatchNorm(mid_channels)
+            int(mid_channels * 5), inplanes, 1, bias=False)
+        self.bn1 = BatchNorm(inplanes)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.5)
         self._init_weight()
@@ -459,7 +459,9 @@ class DepthNet(nn.Module):
                  context_channels,
                  depth_channels,
                  use_dcn=True,
-                 use_aspp=True):
+                 use_aspp=True,
+                 with_cp=False,
+                 aspp_mid_channels=-1):
         super(DepthNet, self).__init__()
         self.reduce_conv = nn.Sequential(
             nn.Conv2d(
@@ -480,7 +482,9 @@ class DepthNet(nn.Module):
             BasicBlock(mid_channels, mid_channels),
         ]
         if use_aspp:
-            depth_conv_list.append(ASPP(mid_channels, mid_channels))
+            if aspp_mid_channels<0:
+                aspp_mid_channels = mid_channels
+            depth_conv_list.append(ASPP(mid_channels, aspp_mid_channels))
         if use_dcn:
             depth_conv_list.append(
                 build_conv_layer(
@@ -501,6 +505,7 @@ class DepthNet(nn.Module):
                 stride=1,
                 padding=0))
         self.depth_conv = nn.Sequential(*depth_conv_list)
+        self.with_cp = with_cp
 
     def forward(self, x, mlp_input):
         mlp_input = self.bn(mlp_input.reshape(-1, mlp_input.shape[-1]))
@@ -510,7 +515,10 @@ class DepthNet(nn.Module):
         context = self.context_conv(context)
         depth_se = self.depth_mlp(mlp_input)[..., None, None]
         depth = self.depth_se(x, depth_se)
-        depth = self.depth_conv(depth)
+        if self.with_cp:
+            depth = checkpoint(self.depth_conv, depth)
+        else:
+            depth = self.depth_conv(depth)
         return torch.cat([depth, context], dim=1)
 
 
@@ -584,8 +592,8 @@ class LSSViewTransformerBEVDepth(LSSViewTransformer):
         self.depth_net = DepthNet(self.in_channels, self.in_channels,
                                   self.out_channels, self.D, **depthnet_cfg)
 
-    def get_mlp_input(self, rot, tran, intrin, post_rot, post_tran, bda):
-        B, N, _, _ = rot.shape
+    def get_mlp_input(self, sensor2ego, ego2global, intrin, post_rot, post_tran, bda):
+        B, N, _, _ = sensor2ego.shape
         bda = bda.view(B, 1, 3, 3).repeat(1, N, 1, 1)
         mlp_input = torch.stack([
             intrin[:, :, 0, 0],
@@ -605,8 +613,7 @@ class LSSViewTransformerBEVDepth(LSSViewTransformer):
             bda[:, :, 2, 2],
         ],
                                 dim=-1)
-        sensor2ego = torch.cat([rot, tran.reshape(B, N, 3, 1)],
-                               dim=-1).reshape(B, N, -1)
+        sensor2ego = sensor2ego[:,:,:3,:].reshape(B, N, -1)
         mlp_input = torch.cat([mlp_input, sensor2ego], dim=-1)
         return mlp_input
 

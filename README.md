@@ -3,7 +3,7 @@
 ![Illustrating the performance of the proposed BEVDet on the nuScenes val set](./resources/nds-fps.png)
 
 ## News
-
+- **2023.04.10** Use single head for multi-class prediction.
 - **2023.01.12** Support TensorRT-INT8.
 - **2022.11.24** A new branch of bevdet codebase, dubbed dev2.0, is released. dev2.0 includes the following features:
 
@@ -23,25 +23,32 @@
 
 | Config                                                                    | mAP        | NDS        | Latency(ms) | FPS  | Model                                                                                          | Log                                                                                            |
 | ------------------------------------------------------------------------- | ---------- | ---------- | ---- | ---- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [**BEVDet-R50**](configs/bevdet/bevdet-r50.py)                            | 27.8       | 32.2       | 37.0/15.9/52.9| 18.9 | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) |
-| [**BEVDet-R50-CBGS**](configs/bevdet/bevdet-r50-cbgs.py)                  | 30.7       | 38.2       |37.0/15.0/52.0 |19.2 | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) |
-| [**BEVDet-R50-4D-CBGS**](configs/bevdet/bevdet4d-r50-cbgs.py) | 34.9/35.4# | 48.4/48.6# | 35.8/15.2/51.0|19.6 | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) |
-| [**BEVDet-R50-4D-Depth-CBGS**](configs/bevdet/bevdet4d-r50-depth-cbgs.py) | 40.2/40.6# | 52.3/52.6# |46.0/14.2/60.2 |16.6 | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) | [google](https://drive.google.com/drive/folders/1Dh2FbEChbfhIaBHimPP4jbibs8XjJ5rx?usp=sharing) |
+| [**BEVDet-R50**](configs/bevdet/bevdet-r50.py)                            | 28.3       | 35.0       | 29.1/4.2/33.3| 30.7 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |
+| [**BEVDet-R50-CBGS**](configs/bevdet/bevdet-r50-cbgs.py)                  | 31.3       | 39.8       |28.9/4.3/33.2 |30.1 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |
+| [**BEVDet-R50-4D-CBGS**](configs/bevdet/bevdet-r50-4d-cbgs.py) | 31.4/35.4# | 44.7/44.9# | 29.1/4.3/33.4|30.0 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |[baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1)|
+| [**BEVDet-R50-4D-Depth-CBGS**](configs/bevdet/bevdet-r50-4d-depth-cbgs.py) | 36.1/31.6# | 48.3/48.4# |35.7/4.0/39.7 |25.2 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |
+| [**BEVDet-R50-4DLongterm-CBGS**](configs/bevdet/bevdet-r50-4dlongterm-cbgs.py) | 34.8/35.4# | 48.2/48.7# | 30.8/4.2/35.0|28.6 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |
+| [**BEVDet-R50-4DLongterm-Depth-CBGS**](configs/bevdet/bevdet-r50-4d-depth-cbgs.py) | 39.4/39.9# | 51.5/51.9# |38.4/4.0/42.4 |23.6 | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) | [baidu](https://pan.baidu.com/s/1237QyV18zvRJ1pU3YzRItw?pwd=npe1) |
 
 \# align previous frame bev feature during the view transformation.
 
-The latency includes Network/Post-Processing/Total.
+Depth: Depth supervised from Lidar as BEVDepth.
 
-## Inference speed with different backends
+Longterm: cat 8 history frame in temporal modeling. 1 by default. 
+
+The latency includes Network/Post-Processing/Total. Training without CBGS is deprecated.
+
+## Inference latency with different backends
 
 | Backend       | 256x704 | 384x1056 | 512x1408 | 640x1760 |
 | ------------- | ------- | -------- | -------- | -------- |
-| PyTorch       | 37.9    | 64.7     | 105.7    | 154.2    |
-| TensorRT      | 18.4    | 25.9     | 40.0     | 58.3     |
-| TensorRT-FP16 | 7.2     | 10.6     | 15.3     | 21.2     |
-| TensorRT-INT8 | 4.4     | 5.8      | 8.2      | 11.0     |
+| PyTorch       | 28.9    | 49.7     | 78.7    | 113.4    |
+| TensorRT      | 14.0    | 22.8     | 36.5     | 53.0     |
+| TensorRT-FP16 | 4.94     | 7.96     | 12.4     | 17.9     |
+| TensorRT-INT8 | 2.93    | 4.41      | 6.58      | 9.19     |                                      
+| TensorRT-INT8(Xavier) | 25.0    | -      | -     | -    | 
 
-- Evaluate with [**BEVDet-R50**](configs/bevdet/bevdet-r50.py) on a RTX 3090 GPU. We omit the postprocessing, which runs about 14.3 ms with the PyTorch backend.
+- Evaluate with [**BEVDet-R50-CBGS**](configs/bevdet/bevdet-r50-cbgs.py) on a RTX 3090 GPU by default. We omit the postprocessing, which spends up to 5 ms with the PyTorch backend.
 
 ## Get Started
 

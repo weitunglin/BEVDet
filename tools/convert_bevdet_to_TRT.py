@@ -368,7 +368,8 @@ def main():
                     'img', 'ranks_depth', 'ranks_feat', 'ranks_bev',
                     'interval_starts', 'interval_lengths'
                 ],
-                output_names=[f'output_{j}' for j in range(36)])
+                output_names=[f'output_{j}' for j in
+                              range(6 * len(model.pts_bbox_head.task_heads))])
         break
     # check onnx model
     onnx_model = onnx.load(args.work_dir + model_prefix + '.onnx')

@@ -809,13 +809,11 @@ class PrepareImageInputs(object):
         data_config,
         is_train=False,
         sequential=False,
-        ego_cam='CAM_FRONT',
     ):
         self.is_train = is_train
         self.data_config = data_config
         self.normalize_img = mmlabNormalize
         self.sequential = sequential
-        self.ego_cam = ego_cam
 
     def get_rot(self, h):
         return torch.Tensor([
@@ -879,9 +877,10 @@ class PrepareImageInputs(object):
             rotate = np.random.uniform(*self.data_config['rot'])
         else:
             resize = float(fW) / float(W)
-            resize += self.data_config.get('resize_test', 0.0)
             if scale is not None:
-                resize = scale
+                resize += scale
+            else:
+                resize += self.data_config.get('resize_test', 0.0)
             resize_dims = (int(W * resize), int(H * resize))
             newW, newH = resize_dims
             crop_h = int((1 - np.mean(self.data_config['crop_h'])) * newH) - fH
@@ -891,76 +890,39 @@ class PrepareImageInputs(object):
             rotate = 0
         return resize, resize_dims, crop, flip, rotate
 
-    def get_sensor2ego_transformation(self,
-                                      cam_info,
-                                      key_info,
-                                      cam_name,
-                                      ego_cam=None):
-        if ego_cam is None:
-            ego_cam = cam_name
+    def get_sensor_transforms(self, cam_info, cam_name):
         w, x, y, z = cam_info['cams'][cam_name]['sensor2ego_rotation']
         # sweep sensor to sweep ego
-        sweepsensor2sweepego_rot = torch.Tensor(
+        sensor2ego_rot = torch.Tensor(
             Quaternion(w, x, y, z).rotation_matrix)
-        sweepsensor2sweepego_tran = torch.Tensor(
+        sensor2ego_tran = torch.Tensor(
             cam_info['cams'][cam_name]['sensor2ego_translation'])
-        sweepsensor2sweepego = sweepsensor2sweepego_rot.new_zeros((4, 4))
-        sweepsensor2sweepego[3, 3] = 1
-        sweepsensor2sweepego[:3, :3] = sweepsensor2sweepego_rot
-        sweepsensor2sweepego[:3, -1] = sweepsensor2sweepego_tran
+        sensor2ego = sensor2ego_rot.new_zeros((4, 4))
+        sensor2ego[3, 3] = 1
+        sensor2ego[:3, :3] = sensor2ego_rot
+        sensor2ego[:3, -1] = sensor2ego_tran
         # sweep ego to global
         w, x, y, z = cam_info['cams'][cam_name]['ego2global_rotation']
-        sweepego2global_rot = torch.Tensor(
+        ego2global_rot = torch.Tensor(
             Quaternion(w, x, y, z).rotation_matrix)
-        sweepego2global_tran = torch.Tensor(
+        ego2global_tran = torch.Tensor(
             cam_info['cams'][cam_name]['ego2global_translation'])
-        sweepego2global = sweepego2global_rot.new_zeros((4, 4))
-        sweepego2global[3, 3] = 1
-        sweepego2global[:3, :3] = sweepego2global_rot
-        sweepego2global[:3, -1] = sweepego2global_tran
-
-        # global sensor to cur ego
-        w, x, y, z = key_info['cams'][ego_cam]['ego2global_rotation']
-        keyego2global_rot = torch.Tensor(
-            Quaternion(w, x, y, z).rotation_matrix)
-        keyego2global_tran = torch.Tensor(
-            key_info['cams'][ego_cam]['ego2global_translation'])
-        keyego2global = keyego2global_rot.new_zeros((4, 4))
-        keyego2global[3, 3] = 1
-        keyego2global[:3, :3] = keyego2global_rot
-        keyego2global[:3, -1] = keyego2global_tran
-        global2keyego = keyego2global.inverse()
-
-        sweepsensor2keyego = \
-            global2keyego @ sweepego2global @ sweepsensor2sweepego
-
-        # cur ego to sensor
-        w, x, y, z = key_info['cams'][cam_name]['sensor2ego_rotation']
-        keysensor2keyego_rot = torch.Tensor(
-            Quaternion(w, x, y, z).rotation_matrix)
-        keysensor2keyego_tran = torch.Tensor(
-            key_info['cams'][cam_name]['sensor2ego_translation'])
-        keysensor2keyego = keysensor2keyego_rot.new_zeros((4, 4))
-        keysensor2keyego[3, 3] = 1
-        keysensor2keyego[:3, :3] = keysensor2keyego_rot
-        keysensor2keyego[:3, -1] = keysensor2keyego_tran
-        keyego2keysensor = keysensor2keyego.inverse()
-        keysensor2sweepsensor = (
-            keyego2keysensor @ global2keyego @ sweepego2global
-            @ sweepsensor2sweepego).inverse()
-        return sweepsensor2keyego, keysensor2sweepsensor
+        ego2global = ego2global_rot.new_zeros((4, 4))
+        ego2global[3, 3] = 1
+        ego2global[:3, :3] = ego2global_rot
+        ego2global[:3, -1] = ego2global_tran
+        return sensor2ego, ego2global
 
     def get_inputs(self, results, flip=None, scale=None):
         imgs = []
-        rots = []
-        trans = []
+        sensor2egos = []
+        ego2globals = []
         intrins = []
         post_rots = []
         post_trans = []
         cam_names = self.choose_cams()
         results['cam_names'] = cam_names
         canvas = []
-        sensor2sensors = []
         for cam_name in cam_names:
             cam_data = results['curr']['cams'][cam_name]
             filename = cam_data['data_path']
@@ -970,19 +932,8 @@ class PrepareImageInputs(object):
 
             intrin = torch.Tensor(cam_data['cam_intrinsic'])
 
-            if self.ego_cam == 'CAM_FRONT':
-                sensor2keyego, sensor2sensor = \
-                    self.get_sensor2ego_transformation(results['curr'],
-                                                    results['curr'],
-                                                    cam_name,
-                                                    self.ego_cam)
-                rot = sensor2keyego[:3, :3]
-                tran = sensor2keyego[:3, 3]
-            elif self.ego_cam == 'image_front_bottom_60':
-                rot = torch.Tensor(results['curr']['cams'][cam_name]['sensor2lidar_rotation'])
-                tran = torch.Tensor(results['curr']['cams'][cam_name]['sensor2lidar_translation'])
-                sensor2sensor = torch.Tensor(np.eye(4))
-
+            sensor2ego, ego2global = \
+                self.get_sensor_transforms(results['curr'], cam_name)
             # image view augmentation (resize, crop, horizontal flip, rotate)
             img_augs = self.sample_augmentation(
                 H=img.height, W=img.width, flip=flip, scale=scale)
@@ -1018,11 +969,10 @@ class PrepareImageInputs(object):
                         rotate=rotate)
                     imgs.append(self.normalize_img(img_adjacent))
             intrins.append(intrin)
-            rots.append(rot)
-            trans.append(tran)
+            sensor2egos.append(sensor2ego)
+            ego2globals.append(ego2global)
             post_rots.append(post_rot)
             post_trans.append(post_tran)
-            sensor2sensors.append(sensor2sensor)
 
         if self.sequential:
             for adj_info in results['adjacent']:
@@ -1031,34 +981,21 @@ class PrepareImageInputs(object):
                 intrins.extend(intrins[:len(cam_names)])
 
                 # align
-                trans_adj = []
-                rots_adj = []
-                sensor2sensors_adj = []
                 for cam_name in cam_names:
-                    adjsensor2keyego, sensor2sensor = \
-                        self.get_sensor2ego_transformation(adj_info,
-                                                           results['curr'],
-                                                           cam_name,
-                                                           self.ego_cam)
-                    rot = adjsensor2keyego[:3, :3]
-                    tran = adjsensor2keyego[:3, 3]
-                    rots_adj.append(rot)
-                    trans_adj.append(tran)
-                    sensor2sensors_adj.append(sensor2sensor)
-                rots.extend(rots_adj)
-                trans.extend(trans_adj)
-                sensor2sensors.extend(sensor2sensors_adj)
+                    sensor2ego, ego2global = \
+                        self.get_sensor_transforms(adj_info, cam_name)
+                    sensor2egos.append(sensor2ego)
+                    ego2globals.append(ego2global)
+
         imgs = torch.stack(imgs)
 
-        rots = torch.stack(rots)
-        trans = torch.stack(trans)
+        sensor2egos = torch.stack(sensor2egos)
+        ego2globals = torch.stack(ego2globals)
         intrins = torch.stack(intrins)
         post_rots = torch.stack(post_rots)
         post_trans = torch.stack(post_trans)
-        sensor2sensors = torch.stack(sensor2sensors)
         results['canvas'] = canvas
-        results['sensor2sensors'] = sensor2sensors
-        return (imgs, rots, trans, intrins, post_rots, post_trans)
+        return (imgs, sensor2egos, ego2globals, intrins, post_rots, post_trans)
 
     def __call__(self, results):
         results['img_inputs'] = self.get_inputs(results)
