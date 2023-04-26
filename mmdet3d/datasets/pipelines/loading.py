@@ -932,8 +932,15 @@ class PrepareImageInputs(object):
 
             intrin = torch.Tensor(cam_data['cam_intrinsic'])
 
-            sensor2ego, ego2global = \
-                self.get_sensor_transforms(results['curr'], cam_name)
+            if "image_" in cam_name:
+                sensor2ego = torch.zeros(4, 4)
+                sensor2ego[3, 3] = 1
+                sensor2ego[:3, :3] = torch.as_tensor(cam_data['sensor2lidar_rotation'])
+                sensor2ego[:3, -1] = torch.as_tensor(cam_data['sensor2lidar_translation'])
+                ego2global = torch.eye(4)
+            else:
+                sensor2ego, ego2global = \
+                    self.get_sensor_transforms(results['curr'], cam_name)
             # image view augmentation (resize, crop, horizontal flip, rotate)
             img_augs = self.sample_augmentation(
                 H=img.height, W=img.width, flip=flip, scale=scale)

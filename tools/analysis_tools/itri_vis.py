@@ -171,42 +171,43 @@ def main():
         pred_res = res['results'][infos['token']]
         pred_boxes = [
             pred_res[rid]['translation'] + pred_res[rid]['size'] + [
-                Quaternion(pred_res[rid]['rotation']).yaw_pitch_roll[0] +
-                np.pi / 2
+                Quaternion(pred_res[rid]['rotation']).yaw_pitch_roll[0]
             ] for rid in range(len(pred_res))
         ]
         if len(pred_boxes) == 0:
             corners_lidar = np.zeros((0, 3), dtype=np.float32)
         else:
             pred_boxes = np.array(pred_boxes, dtype=np.float32)
-            boxes = LB(pred_boxes, origin=(0.5, 0.5, 0.0))
-            corners_global = boxes.corners.numpy().reshape(-1, 3)
-            corners_global = np.concatenate(
-                [corners_global,
-                 np.ones([corners_global.shape[0], 1])],
-                axis=1)
-            l2g = get_lidar2global(infos)
-            corners_lidar = corners_global @ np.linalg.inv(l2g).T
-            corners_lidar = corners_lidar[:, :3]
+            boxes = LB(pred_boxes, origin=(0.0, 0.0, 0.0))
+            corners_lidar = boxes.corners.numpy().reshape(-1, 3)
+            # corners_global = boxes.corners.numpy().reshape(-1, 3)
+            # corners_global = np.concatenate(
+            #     [corners_global,
+            #      np.ones([corners_global.shape[0], 1])],
+            #     axis=1)
+            # l2g = get_lidar2global(infos)
+            # corners_lidar = corners_global @ np.linalg.inv(l2g).T
+            # corners_lidar = corners_lidar[:, :3]
         pred_flag = np.ones((corners_lidar.shape[0] // 8, ), dtype=np.bool)
         scores = [
             pred_res[rid]['detection_score'] for rid in range(len(pred_res))
         ]
         if args.draw_gt:
-            gt_boxes = infos['gt_boxes']
-            gt_boxes[:, -1] = gt_boxes[:, -1] + np.pi / 2
-            width = gt_boxes[:, 4].copy()
-            gt_boxes[:, 4] = gt_boxes[:, 3]
-            gt_boxes[:, 3] = width
-            corners_lidar_gt = \
-                LB(infos['gt_boxes'],
-                   origin=(0.5, 0.5, 0.5)).corners.numpy().reshape(-1, 3)
-            corners_lidar = np.concatenate([corners_lidar, corners_lidar_gt],
-                                           axis=0)
-            gt_flag = np.ones((corners_lidar_gt.shape[0] // 8), dtype=np.bool)
-            pred_flag = np.concatenate(
-                [pred_flag, np.logical_not(gt_flag)], axis=0)
-            scores = scores + [0 for _ in range(infos['gt_boxes'].shape[0])]
+            gt_boxes = np.array(infos['gt_boxes'])
+            if not gt_boxes.shape[0] == 0:
+                gt_boxes = gt_boxes[:, :7]
+                width = gt_boxes[:, 4].copy()
+                gt_boxes[:, 4] = gt_boxes[:, 3]
+                gt_boxes[:, 3] = width
+                corners_lidar_gt = \
+                    LB(gt_boxes,
+                    origin=(0.0, 0.0, 0.0)).corners.numpy().reshape(-1, 3)
+                corners_lidar = np.concatenate([corners_lidar, corners_lidar_gt],
+                                            axis=0)
+                gt_flag = np.ones((corners_lidar_gt.shape[0] // 8), dtype=np.bool)
+                pred_flag = np.concatenate(
+                    [pred_flag, np.logical_not(gt_flag)], axis=0)
+                scores = scores + [0 for _ in range(gt_boxes.shape[0])]
         scores = np.array(scores, dtype=np.float32)
         sort_ids = np.argsort(scores)
 

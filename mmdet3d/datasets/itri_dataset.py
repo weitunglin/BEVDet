@@ -57,7 +57,10 @@ class ITRIDataset(Custom3DDataset):
         self.multi_adj_frame_id_cfg = multi_adj_frame_id_cfg
         self.ego_cam = ego_cam
 
-        self.CLASSES = ('pedestrian', 'bicycle', 'car', 'motorbike', 'bus', 'truck', 'dontcare')
+        self.CLASSES = (
+            'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
+            'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
+        )
         self.CLASSES_INDEX = list(self.CLASSES)
     
     def load_annotations(self, ann_file):

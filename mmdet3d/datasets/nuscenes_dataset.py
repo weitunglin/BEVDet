@@ -138,7 +138,7 @@ class NuScenesDataset(Custom3DDataset):
                  use_valid_flag=False,
                  img_info_prototype='mmcv',
                  multi_adj_frame_id_cfg=None,
-                 ego_cam='CAM_FRONT'):
+                 ego_cam='image_front_bottom_60'):
         self.load_interval = load_interval
         self.use_valid_flag = use_valid_flag
         super().__init__(
@@ -231,9 +231,9 @@ class NuScenesDataset(Custom3DDataset):
         # standard protocol modified from SECOND.Pytorch
         input_dict = dict(
             sample_idx=info['token'],
-            pts_filename=info['lidar_path'],
-            sweeps=info['sweeps'],
-            timestamp=info['timestamp'] / 1e6,
+            # pts_filename=info['lidar_path'],
+            # sweeps=info['sweeps'],
+            timestamp=info['timestamp'],
         )
         if 'ann_infos' in info:
             input_dict['ann_infos'] = info['ann_infos']
@@ -357,11 +357,13 @@ class NuScenesDataset(Custom3DDataset):
             labels = det['labels_3d'].numpy()
             sample_token = self.data_infos[sample_id]['token']
 
-            trans = self.data_infos[sample_id]['cams'][
-                self.ego_cam]['ego2global_translation']
-            rot = self.data_infos[sample_id]['cams'][
-                self.ego_cam]['ego2global_rotation']
-            rot = pyquaternion.Quaternion(rot)
+            # trans = self.data_infos[sample_id]['cams'][
+            #     self.ego_cam]['ego2global_translation']
+            # rot = self.data_infos[sample_id]['cams'][
+            #     self.ego_cam]['ego2global_rotation']
+            # rot = pyquaternion.Quaternion(rot)
+            trans = np.array([0, 0, 0])
+            rot = pyquaternion.Quaternion()
             annos = list()
             for i, box in enumerate(boxes):
                 name = mapped_class_names[labels[i]]

@@ -27,7 +27,7 @@ _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
-# For nuScenes we usually do 7-class detection
+# For nuScenes we usually do 10-class detection
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
     'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
@@ -40,6 +40,7 @@ data_config = {
     'Ncams':
     4,
     'input_size': (256, 704),
+    # 'src_size': (900, 1600),
     'src_size': (380, 608),
 
     # Augmentation
@@ -163,7 +164,6 @@ model = dict(
 )
 
 # Data
-# dataset_type = 'ITRIDataset'
 dataset_type = 'NuScenesDataset'
 data_root = 'data/itri_dataset/'
 file_client_args = dict(backend='disk')
@@ -173,8 +173,6 @@ bda_aug_conf = dict(
     scale_lim=(0.95, 1.05),
     flip_dx_ratio=0.5,
     flip_dy_ratio=0.5)
-
-load_from = 'bevdet-r50-cbgs.pth'
 
 train_pipeline = [
     dict(
@@ -267,8 +265,10 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=200,
     warmup_ratio=0.001,
-    step=[30,])
-runner = dict(type='EpochBasedRunner', max_epochs=30)
+    step=[20,])
+runner = dict(type='EpochBasedRunner', max_epochs=20)
+
+load_from = 'bevdet-r50-cbgs.pth'
 
 log_config = dict(
     interval=5,

@@ -17,7 +17,7 @@ pip install numpy==1.23
 
 1. train the model
 ```shell=
-export name=bevdet-r50-cbgs-front
+export name=bevdet-r50-cbgs-itri
 export config=configs/bevdet/${name}.py
 export work_dir=work_dir/${name}/
 ./tools/dist_train.sh $config 4 --work-dir $work_dir
@@ -25,18 +25,18 @@ export work_dir=work_dir/${name}/
 
 2. eval the model
 ```shell=
-export name=bevdet-r50-cbgs-front
+export name=bevdet-r50-cbgs-itri
 export config=configs/bevdet/${name}.py
 export work_dir=work_dir/${name}/
 export checkpoint=${work_dir}/latest.pth
 export out=${work_dir}/${name}-eval-result.pkl
 
 # test & eval
-./tools/dist_test.sh $config $checkpoint 4 --eval bbox --out $out
+./tools/dist_test.sh $config $checkpoint 2 --eval bbox --out $out
 
 # visualization
-./tools/dist_test.sh $config $checkpoint 4 --format-only --eval-options jsonfile_prefix=$work_dir --resume-result $out
-python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/nuscenes/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --vis-frames 1000 --save_path $work_dir
+./tools/dist_test.sh $config $checkpoint 2 --format-only --eval-options jsonfile_prefix=$work_dir --resume-result $out
+python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/itri_dataset/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --vis-frames 1000 --save_path $work_dir
 ```
 
 
