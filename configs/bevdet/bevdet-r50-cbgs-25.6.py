@@ -26,7 +26,7 @@ _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
-point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+point_cloud_range = [-25.6, -25.6, -5.0, 25.6, 25.6, 3.0]
 # For nuScenes we usually do 10-class detection
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
@@ -53,8 +53,8 @@ data_config = {
 
 # Model
 grid_config = {
-    'x': [-51.2, 51.2, 0.8],
-    'y': [-51.2, 51.2, 0.8],
+    'x': [-25.6, 25.6, 0.4],
+    'y': [-25.6, 25.6, 0.4],
     'z': [-5, 3, 8],
     'depth': [1.0, 60.0, 1.0],
 }
@@ -115,7 +115,7 @@ model = dict(
         bbox_coder=dict(
             type='CenterPointBBoxCoder',
             pc_range=point_cloud_range[:2],
-            post_center_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+            post_center_range=[-35.6, -35.6, -10.0, 35.6, 35.6, 10.0],
             max_num=500,
             score_threshold=0.1,
             out_size_factor=8,
@@ -141,7 +141,7 @@ model = dict(
     test_cfg=dict(
         pts=dict(
             pc_range=point_cloud_range[:2],
-            post_center_limit_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+            post_center_limit_range=[-35.6, -35.6, -10.0, 35.6, 35.6, 10.0],
             max_per_img=500,
             max_pool_nms=False,
             min_radius=[4, 12, 10, 1, 0.85, 0.175],
@@ -195,6 +195,12 @@ test_pipeline = [
         classes=class_names,
         is_train=False),
     dict(
+        type='LoadPointsFromFile',
+        coord_type='LIDAR',
+        load_dim=5,
+        use_dim=5,
+        file_client_args=file_client_args),
+    dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
         pts_scale_ratio=1,
@@ -204,7 +210,7 @@ test_pipeline = [
                 type='DefaultFormatBundle3D',
                 class_names=class_names,
                 with_label=False),
-            dict(type='Collect3D', keys=['img_inputs'])
+            dict(type='Collect3D', keys=['points', 'img_inputs'])
         ])
 ]
 

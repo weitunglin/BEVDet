@@ -35,13 +35,12 @@ class_names = [
 
 data_config = {
     'cams': [
-        'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT',
-        'CAM_BACK', 'CAM_BACK_RIGHT'
+        'image_front_bottom_60', 'image_front_top_far_30', 'image_left_back_60', 'image_right_back_60'
     ],
     'Ncams':
-    6,
+    4,
     'input_size': (256, 704),
-    'src_size': (900, 1600),
+    'src_size': (380, 608),
 
     # Augmentation
     'resize': (-0.06, 0.11),
@@ -162,7 +161,7 @@ model = dict(
 
 # Data
 dataset_type = 'NuScenesDataset'
-data_root = 'data/nuscenes/'
+data_root = 'data/itri_dataset/'
 file_client_args = dict(backend='disk')
 
 bda_aug_conf = dict(
@@ -224,7 +223,7 @@ share_data_config = dict(
 
 test_data_config = dict(
     pipeline=test_pipeline,
-    ann_file=data_root + 'bevdetv2-nuscenes_infos_val.pkl')
+    ann_file=data_root + 'itri_infos_val.pkl')
 
 data = dict(
     samples_per_gpu=8,
@@ -233,11 +232,11 @@ data = dict(
         type='CBGSDataset',
         dataset=dict(
         data_root=data_root,
-        ann_file=data_root + 'bevdetv2-nuscenes_infos_train.pkl',
+        ann_file=data_root + 'itri_infos_train.pkl',
         pipeline=train_pipeline,
         classes=class_names,
         test_mode=False,
-        use_valid_flag=True,
+        use_valid_flag=False,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
         box_type_3d='LiDAR')),
@@ -256,8 +255,36 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=200,
     warmup_ratio=0.001,
-    step=[20,])
-runner = dict(type='EpochBasedRunner', max_epochs=20)
+    step=[50,])
+runner = dict(type='EpochBasedRunner', max_epochs=50)
+
+evaluation = dict(
+    interval=100,
+    pipeline=[
+        dict(
+            type='LoadPointsFromFile',
+            coord_type='LIDAR',
+            load_dim=5,
+            use_dim=5,
+            file_client_args=dict(backend='disk')),
+        dict(
+            type='LoadPointsFromMultiSweeps',
+            sweeps_num=10,
+            file_client_args=dict(backend='disk')),
+        dict(
+            type='DefaultFormatBundle3D',
+            class_names=[
+                'car', 'truck', 'trailer', 'bus', 'construction_vehicle',
+                'bicycle', 'motorcycle', 'pedestrian', 'traffic_cone',
+                'barrier'
+            ],
+            with_label=False),
+        dict(type='Collect3D', keys=['points'])
+    ])
+
+load_from = 'bevdet-dev2.1/bevdet-r50-cbgs.pth'
+
+checkpoint_config = dict(interval=2)
 
 custom_hooks = [
     dict(
@@ -267,4 +294,4 @@ custom_hooks = [
     ),
 ]
 
-# fp16 = dict(loss_scale='dynamic')
+fp16 = dict(loss_scale='dynamic')

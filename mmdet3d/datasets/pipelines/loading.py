@@ -935,8 +935,8 @@ class PrepareImageInputs(object):
             if "image_" in cam_name:
                 sensor2ego = torch.zeros(4, 4)
                 sensor2ego[3, 3] = 1
-                sensor2ego[:3, :3] = torch.as_tensor(cam_data['sensor2lidar_rotation'])
-                sensor2ego[:3, -1] = torch.as_tensor(cam_data['sensor2lidar_translation'])
+                sensor2ego[:3, :3] = torch.as_tensor(np.array(cam_data['sensor2lidar_rotation']).reshape(3, 3))
+                sensor2ego[:3, -1] = torch.as_tensor(np.array(cam_data['sensor2lidar_translation']).reshape(3))
                 ego2global = torch.eye(4)
             else:
                 sensor2ego, ego2global = \

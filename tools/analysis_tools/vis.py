@@ -205,6 +205,20 @@ def main():
         scores = np.array(scores, dtype=np.float32)
         sort_ids = np.argsort(scores)
 
+        if args.draw_gt: # save per frame result as txt file for evaluation
+            if not os.path.exists(f'{args.save_path}/pred_labels/'):
+                os.mkdir(f'{args.save_path}/pred_labels/')
+            if not os.path.exists(f'{args.save_path}/gt_labels/'):
+                os.mkdir(f'{args.save_path}/gt_labels/')
+            with open(f'{args.save_path}/pred_labels/{infos["token"]}.txt', 'w') as f:
+                for c, i, s in zip((pred_res[rid]['detection_name'] for rid in range(len(pred_res))), pred_boxes, (pred_res[rid]['detection_score'] for rid in range(len(pred_res)))):
+                    a = ','.join(str(x) for x in ([c] + [str(y) for y in i] + [str(s)]))
+                    print(f"{a}", file=f)
+            with open(f'{args.save_path}/gt_labels/{infos["token"]}.txt', 'w') as f:
+                for c, i in zip(np.array(infos['gt_names']), gt_boxes):
+                    a = ','.join(str(x) for x in ([c] + [str(y) for y in i]))
+                    print(f"{a}", file=f)
+
         # image view
         imgs = []
         for view in views:

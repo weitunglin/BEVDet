@@ -26,7 +26,7 @@ _base_ = ['../_base_/datasets/nus-3d.py', '../_base_/default_runtime.py']
 # Global
 # If point cloud range is changed, the models should also change their point
 # cloud range accordingly
-point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+point_cloud_range = [-25.6, -25.6, -5.0, 25.6, 25.6, 3.0]
 # For nuScenes we usually do 10-class detection
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
@@ -35,13 +35,12 @@ class_names = [
 
 data_config = {
     'cams': [
-        'CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT', 'CAM_BACK_LEFT',
-        'CAM_BACK', 'CAM_BACK_RIGHT'
+        'image_front_bottom_60', 'image_front_top_far_30', 'image_left_back_60', 'image_right_back_60'
     ],
     'Ncams':
-    6,
+    4,
     'input_size': (256, 704),
-    'src_size': (900, 1600),
+    'src_size': (380, 608),
 
     # Augmentation
     'resize': (-0.06, 0.11),
@@ -53,8 +52,8 @@ data_config = {
 
 # Model
 grid_config = {
-    'x': [-51.2, 51.2, 0.8],
-    'y': [-51.2, 51.2, 0.8],
+    'x': [-25.6, 25.6, 0.4],
+    'y': [-25.6, 25.6, 0.4],
     'z': [-5, 3, 8],
     'depth': [1.0, 60.0, 1.0],
 }
@@ -115,7 +114,7 @@ model = dict(
         bbox_coder=dict(
             type='CenterPointBBoxCoder',
             pc_range=point_cloud_range[:2],
-            post_center_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+            post_center_range=[-35.6, -35.6, -10.0, 35.6, 35.6, 10.0],
             max_num=500,
             score_threshold=0.1,
             out_size_factor=8,
@@ -141,7 +140,7 @@ model = dict(
     test_cfg=dict(
         pts=dict(
             pc_range=point_cloud_range[:2],
-            post_center_limit_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
+            post_center_limit_range=[-35.6, -35.6, -10.0, 35.6, 35.6, 10.0],
             max_per_img=500,
             max_pool_nms=False,
             min_radius=[4, 12, 10, 1, 0.85, 0.175],
@@ -162,7 +161,7 @@ model = dict(
 
 # Data
 dataset_type = 'NuScenesDataset'
-data_root = 'data/nuscenes/'
+data_root = 'data/itri_dataset/'
 file_client_args = dict(backend='disk')
 
 bda_aug_conf = dict(
@@ -194,6 +193,12 @@ test_pipeline = [
         bda_aug_conf=bda_aug_conf,
         classes=class_names,
         is_train=False),
+    # dict(
+    #     type='LoadPointsFromFile',
+    #     coord_type='LIDAR',
+    #     load_dim=5,
+    #     use_dim=5,
+    #     file_client_args=file_client_args),
     dict(
         type='MultiScaleFlipAug3D',
         img_scale=(1333, 800),
@@ -224,7 +229,7 @@ share_data_config = dict(
 
 test_data_config = dict(
     pipeline=test_pipeline,
-    ann_file=data_root + 'bevdetv2-nuscenes_infos_val.pkl')
+    ann_file=data_root + 'itri_infos_val.pkl')
 
 data = dict(
     samples_per_gpu=8,
@@ -233,11 +238,11 @@ data = dict(
         type='CBGSDataset',
         dataset=dict(
         data_root=data_root,
-        ann_file=data_root + 'bevdetv2-nuscenes_infos_train.pkl',
+        ann_file=data_root + 'itri_infos_train.pkl',
         pipeline=train_pipeline,
         classes=class_names,
         test_mode=False,
-        use_valid_flag=True,
+        use_valid_flag=False,
         # we use box_type_3d='LiDAR' in kitti and nuscenes dataset
         # and box_type_3d='Depth' in sunrgbd and scannet dataset.
         box_type_3d='LiDAR')),
@@ -249,15 +254,50 @@ for key in ['val', 'test']:
 data['train']['dataset'].update(share_data_config)
 
 # Optimizer
-optimizer = dict(type='AdamW', lr=2e-4, weight_decay=1e-2)
+optimizer = dict(type='AdamW', lr=4e-4, weight_decay=1e-2)
 optimizer_config = dict(grad_clip=dict(max_norm=5, norm_type=2))
 lr_config = dict(
     policy='step',
     warmup='linear',
     warmup_iters=200,
     warmup_ratio=0.001,
-    step=[20,])
-runner = dict(type='EpochBasedRunner', max_epochs=20)
+    step=[50,])
+runner = dict(type='EpochBasedRunner', max_epochs=50)
+
+evaluation = dict(
+    interval=100,
+    pipeline=[
+        dict(
+            type='LoadPointsFromFile',
+            coord_type='LIDAR',
+            load_dim=5,
+            use_dim=5,
+            file_client_args=dict(backend='disk')),
+        dict(
+            type='LoadPointsFromMultiSweeps',
+            sweeps_num=10,
+            file_client_args=dict(backend='disk')),
+        dict(
+            type='DefaultFormatBundle3D',
+            class_names=[
+                'car', 'truck', 'trailer', 'bus', 'construction_vehicle',
+                'bicycle', 'motorcycle', 'pedestrian', 'traffic_cone',
+                'barrier'
+            ],
+            with_label=False),
+        dict(type='Collect3D', keys=['points'])
+    ])
+
+checkpoint_config = dict(interval=2)
+
+# load_from = 'work_dir/bevdet-r50-cbgs-25.6/latest.pth'
+
+log_config = dict(
+    interval=15,
+    hooks=[
+        dict(type='TextLoggerHook'),
+        dict(type='TensorboardLoggerHook')
+    ])
 
 custom_hooks = [
     dict(
@@ -267,4 +307,4 @@ custom_hooks = [
     ),
 ]
 
-# fp16 = dict(loss_scale='dynamic')
+fp16 = dict(loss_scale='dynamic')

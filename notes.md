@@ -2,8 +2,8 @@
 
 1. create environment (docker)
 ```shell=
-cd docker && docker build -t .
-docker run --gpus all --shm-size=8g -it --rm -v /home/allenlin/workspace/BEVDet:/home/allenlin/workspace/BEVDet -v /mnt/sda/allenlin/dataset/:/mmdetection3d/data mmdetection3d
+cd docker && docker build -t mmdetection3d:bevdet .
+docker run --gpus all --shm-size=32g --name mmdetection3d -d -it --rm -v /home/allenlin/workspace/BEVDet:/home/allenlin/workspace/BEVDet -v /mnt/sda/allenlin/dataset/:/mmdetection3d/data mmdetection3d:bevdet
 ```
 
 2. install packages
@@ -36,8 +36,12 @@ export out=${work_dir}/${name}-eval-result.pkl
 
 # visualization
 ./tools/dist_test.sh $config $checkpoint 2 --format-only --eval-options jsonfile_prefix=$work_dir --resume-result $out
-python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/itri_dataset/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --vis-frames 1000 --save_path $work_dir
+python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/itri_dataset/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --vis-frames 500 --save_path $work_dir --draw-gt
 ```
+
+## one liner
+./tools/dist_train.sh $config 4 --work-dir $work_dir ; ./tools/dist_test.sh $config $checkpoint 4 --format-only --eval-options jsonfile_prefix=$work_dir ; python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/itri_dataset/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --save_path $work_dir --video-prefix front_four_cams_wo_gt --save-result --skip-frames 0 --vis-frames 4508 ; python tools/analysis_tools/itri_vis.py $work_dir/pts_bbox/results_nusc.json --root_path /mmdetection3d/data/itri_dataset/ --canva-size 600 --scale-factor 1 --vis-thred 0.4 --vis-frames 2000 --save_path $work_dir --video-prefix front_four_cams --draw-gt ; python ../3d_lidar_detection_evaluation/nuscenes_eval.py  --pred_labels ${work_dir}/pred_labels --gt_labels ${work_dir}/gt_labels --format "class x y z l w h r score" --classes "car,truck,construction_vehicle,bus,trailer,barrier,motorcycle,bicycle,pedestrian,traffic_cone"
+
 
 
 ## Run BEVDet on nuScenes

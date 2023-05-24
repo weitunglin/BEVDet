@@ -64,6 +64,17 @@ def get_lidar2global(infos):
     # ego2global[:3, 3] = infos['ego2global_translation']
     return ego2global @ lidar2ego
 
+def align_coordinate(arr):
+    arr = np.array(arr)
+    arr = arr[[1, 0, 2]]
+    arr[0] = -arr[0]
+    # arr[1] = -arr[1]
+    return list(arr)
+
+def align_coordinate_2(arr):
+    arr = np.array(arr)
+    arr = arr[[1, 0, 2]]
+    return list(arr)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Visualize the predicted '
@@ -94,6 +105,7 @@ def parse_args():
         default=0.3,
         help='Threshold the predicted results')
     parser.add_argument('--draw-gt', action='store_true')
+    parser.add_argument('--save-result', action='store_true')
     parser.add_argument(
         '--version',
         type=str,
@@ -119,6 +131,8 @@ def parse_args():
         '--fps', type=int, default=20, help='Frame rate of video')
     parser.add_argument(
         '--video-prefix', type=str, default='vis', help='name of video')
+    parser.add_argument(
+        '--skip-frames', type=int, default=150, help='Frames to skip at the beginning')
     args = parser.parse_args()
     return args
 
@@ -163,17 +177,23 @@ def main():
         "image_front_bottom_60", "image_front_top_far_30", "image_left_back_60", "image_right_back_60"
     ]
     print('start visualizing results')
+    dataset['infos'] = sorted(dataset['infos'], key = lambda ele: int(ele['timestamp']))
     for cnt, infos in enumerate(
-            dataset['infos'][:min(args.vis_frames, len(dataset['infos']))]):
+            dataset['infos'][:min(args.vis_frames, len(dataset['infos']))], args.skip_frames):
         if cnt % 10 == 0:
             print('%d/%d' % (cnt, min(args.vis_frames, len(dataset['infos']))))
         # collect instances
         pred_res = res['results'][infos['token']]
         pred_boxes = [
-            pred_res[rid]['translation'] + pred_res[rid]['size'] + [
-                Quaternion(pred_res[rid]['rotation']).yaw_pitch_roll[0]
+            align_coordinate(pred_res[rid]['translation']) + align_coordinate_2(pred_res[rid]['size']) + [
+                (Quaternion(pred_res[rid]['rotation']).yaw_pitch_roll[0])
             ] for rid in range(len(pred_res))
         ]
+
+        """ only visualize ground-truth
+        pred_res = []
+        pred_boxes = []
+        """
         if len(pred_boxes) == 0:
             corners_lidar = np.zeros((0, 3), dtype=np.float32)
         else:
@@ -192,13 +212,19 @@ def main():
         scores = [
             pred_res[rid]['detection_score'] for rid in range(len(pred_res))
         ]
-        if args.draw_gt:
+        if args.draw_gt or args.save_result:
             gt_boxes = np.array(infos['gt_boxes'])
             if not gt_boxes.shape[0] == 0:
                 gt_boxes = gt_boxes[:, :7]
-                width = gt_boxes[:, 4].copy()
-                gt_boxes[:, 4] = gt_boxes[:, 3]
-                gt_boxes[:, 3] = width
+                # gt_boxes[:, -1] = gt_boxes[:, -1] + np.pi / 2
+                x = gt_boxes[:, 0].copy()
+                gt_boxes[:, 0] = gt_boxes[:, 1]
+                gt_boxes[:, 1] = x
+                gt_boxes[:, 0] = -gt_boxes[:, 0]
+                # gt_boxes[:, 1] = -gt_boxes[:, 1]
+                # width = gt_boxes[:, 4].copy()
+                # gt_boxes[:, 4] = gt_boxes[:, 3]
+                # gt_boxes[:, 3] = width
                 corners_lidar_gt = \
                     LB(gt_boxes,
                     origin=(0.0, 0.0, 0.0)).corners.numpy().reshape(-1, 3)
@@ -211,47 +237,68 @@ def main():
         scores = np.array(scores, dtype=np.float32)
         sort_ids = np.argsort(scores)
 
+        if args.save_result: # save per frame result as txt file for evaluation
+            if not os.path.exists(f'{args.save_path}/pred_labels/'):
+                os.mkdir(f'{args.save_path}/pred_labels/')
+            if not os.path.exists(f'{args.save_path}/gt_labels/'):
+                os.mkdir(f'{args.save_path}/gt_labels/')
+            with open(f'{args.save_path}/pred_labels/{infos["token"]}.txt', 'w') as f:
+                for c, i, s in zip((pred_res[rid]['detection_name'] for rid in range(len(pred_res))), pred_boxes, (pred_res[rid]['detection_score'] for rid in range(len(pred_res)))):
+                    a = ','.join(str(x) for x in ([c] + [str(y) for y in i] + [str(s)]))
+                    print(a, file=f)
+            with open(f'{args.save_path}/gt_labels/{infos["token"]}.txt', 'w') as f:
+                for c, i in zip(np.array(infos['gt_names']), gt_boxes):
+                    a = ','.join(str(x) for x in ([c] + [str(y) for y in i]))
+                    print(a, file=f)
+
         # image view
         imgs = []
         for view in views:
             img = cv2.imread(infos['cams'][view]['data_path'])
             # draw instances
-            corners_img, valid = lidar2img(corners_lidar, infos['cams'][view])
-            valid = np.logical_and(
-                valid,
-                check_point_in_img(corners_img, img.shape[0], img.shape[1]))
-            valid = valid.reshape(-1, 8)
-            corners_img = corners_img.reshape(-1, 8, 2).astype(np.int)
-            for aid in range(valid.shape[0]):
-                for index in draw_boxes_indexes_img_view:
-                    if valid[aid, index[0]] and valid[aid, index[1]] and scores[aid] > args.vis_thred:
-                        cv2.line(
-                            img,
-                            corners_img[aid, index[0]],
-                            corners_img[aid, index[1]],
-                            color=color_map[int(pred_flag[aid])],
-                            thickness=scale_factor)
+            # corners_img, valid = lidar2img(corners_lidar, infos['cams'][view])
+            # valid = np.logical_and(
+            #     valid,
+            #     check_point_in_img(corners_img, img.shape[0], img.shape[1]))
+            # valid = valid.reshape(-1, 8)
+            # corners_img = corners_img.reshape(-1, 8, 2).astype(np.int)
+            # for aid in range(valid.shape[0]):
+            #     for index in draw_boxes_indexes_img_view:
+            #         if valid[aid, index[0]] and valid[aid, index[1]] and scores[aid] > args.vis_thred:
+            #             cv2.line(
+            #                 img,
+            #                 corners_img[aid, index[0]],
+            #                 corners_img[aid, index[1]],
+            #                 color=color_map[int(pred_flag[aid])],
+            #                 thickness=scale_factor)
             imgs.append(img)
 
         # bird-eye-view
         canvas = np.zeros((int(canva_size), int(canva_size), 3),
                           dtype=np.uint8)
         # draw lidar points
-        if False: # no draw lidar points
-            lidar_points = np.fromfile(infos['lidar_path'], dtype=np.float32)
-            lidar_points = lidar_points.reshape(-1, 5)[:, :3]
-            lidar_points[:, 1] = -lidar_points[:, 1]
-            lidar_points[:, :2] = \
-                (lidar_points[:, :2] + show_range) / show_range / 2.0 * canva_size
-            for p in lidar_points:
-                if check_point_in_img(
-                        p.reshape(1, 3), canvas.shape[1], canvas.shape[0])[0]:
-                    color = depth2color(p[2])
-                    cv2.circle(
-                        canvas, (int(p[0]), int(p[1])),
-                        radius=0,
-                        color=color,
-                        thickness=1)
+        if args.draw_gt:
+            with open(infos['lidar_path'], 'rb') as f:
+                header = f.read(4096)
+                num_points_line = [line for line in header.split(b'\n') if line.startswith(b'POINTS')][0]
+                num_points = int(num_points_line.split(b' ')[-1])
+
+                lidar_points = np.fromfile(f, dtype=np.float32, count=num_points*3)
+                lidar_points = lidar_points.reshape(-1, 3)[:, :3]
+                lidar_points[:, [0, 1]] = lidar_points[:, [1, 0]]
+                lidar_points[:, 0] = -lidar_points[:, 0]
+                lidar_points[:, 1] = -lidar_points[:, 1]
+                lidar_points[:, :2] = \
+                    (lidar_points[:, :2] + show_range) / show_range / 2.0 * canva_size
+                for p in lidar_points:
+                    if check_point_in_img(
+                            p.reshape(1, 3), canvas.shape[1], canvas.shape[0])[0]:
+                        color = depth2color(p[2])
+                        cv2.circle(
+                            canvas, (int(p[0]), int(p[1])),
+                            radius=0,
+                            color=color,
+                            thickness=1)
 
         # draw instances
         corners_lidar = corners_lidar.reshape(-1, 8, 3)

@@ -217,6 +217,10 @@ test_pipeline = [
         ])
 ]
 
+evaluation = dict(
+    interval=100, # don't do evalutaion, cause it's broken
+)
+
 input_modality = dict(
     use_lidar=False,
     use_camera=True,
@@ -265,13 +269,13 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=200,
     warmup_ratio=0.001,
-    step=[20,])
-runner = dict(type='EpochBasedRunner', max_epochs=20)
+    step=[50,])
+runner = dict(type='EpochBasedRunner', max_epochs=50)
 
 load_from = 'bevdet-r50-cbgs.pth'
 
 log_config = dict(
-    interval=5,
+    interval=2,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
