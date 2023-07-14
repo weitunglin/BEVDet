@@ -16,17 +16,15 @@ except ImportError:
 
 import argparse
 from mmcv import Config, DictAction
-from mmdet3d.core import bbox3d2result
 from mmdet3d.core.bbox.structures.box_3d_mode import LiDARInstance3DBoxes
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Deploy BEVDet with Tensorrt')
     parser.add_argument('config', help='deploy config file path')
     parser.add_argument('engine', help='checkpoint file')
-    parser.add_argument('--samples', default=80, help='samples to benchmark')
+    parser.add_argument('--samples', default=10, help='samples to benchmark')
     parser.add_argument('--postprocessing', action='store_true')
     parser.add_argument(
         '--format-only',
@@ -172,17 +170,47 @@ def main():
     results = list()
     for i, data in enumerate(data_loader):
         if init_:
-            inputs = [t.cuda() for t in data['img_inputs'][0]]
-            metas_ = model.get_bev_pool_input(inputs)
-            metas = dict(
-                ranks_bev=metas_[0].int().contiguous(),
-                ranks_depth=metas_[1].int().contiguous(),
-                ranks_feat=metas_[2].int().contiguous(),
-                interval_starts=metas_[3].int().contiguous(),
-                interval_lengths=metas_[4].int().contiguous())
+            # inputs = [t.cuda() for t in data['img_inputs'][0]]
+            # metas_ = model.get_bev_pool_input(inputs)
+            # metas = dict(
+            #     ranks_bev=metas_[0].int().contiguous(),
+            #     ranks_depth=metas_[1].int().contiguous(),
+            #     ranks_feat=metas_[2].int().contiguous(),
+            #     interval_starts=metas_[3].int().contiguous(),
+            #     interval_lengths=metas_[4].int().contiguous())
+            
+            import pickle
+            # with open('bevdet_metas.pkl', 'wb') as f:
+            #     pickle.dump(metas, f)
+            
+            with open('work_dir/bevdet-r50-cbgs-25.6-itri-align-coordinate/bevdet_metas.pkl', 'rb') as f:
+                metas = pickle.load(f)
+
             init_ = False
+
+            # for x in metas:
+            #     print(x)
+            #     print(metas[x].shape)
+
+            # ranks_bev
+            # torch.Size([70723])
+            # ranks_depth
+            # torch.Size([70723])
+            # ranks_feat
+            # torch.Size([70723])
+            # interval_starts
+            # torch.Size([4997])
+            # interval_lengths
+            # torch.Size([4997])
+
+            # print(model.pts_bbox_head.task_heads)
+            # print(len(model.pts_bbox_head.task_heads))
+            
+
         img = data['img_inputs'][0][0].cuda().squeeze(0).contiguous()
 
+        # print(img.shape)
+        # torch.Size([4, 3, 256, 704])
 
         torch.cuda.synchronize()
 
@@ -191,12 +219,35 @@ def main():
 
         # postprocessing
         if args.postprocessing:
+            # trt_output = [trt_output[f'output_{i}'] for i in
+            #               range(6 * len(model.pts_bbox_head.task_heads))]
+
             trt_output = [trt_output[f'output_{i}'] for i in
-                          range(6 * len(model.pts_bbox_head.task_heads))]
+                          range(6 * 1)]
+            """
+            {
+                boxes_3d: LiDARInstance3DBoxes(),
+                scores_3d: tensor(float),
+                labels_3d: tensor(int),
+            }
+            """
+
+            # print(len(trt_output))
+
+            # for x in trt_output:
+            #     print(x.shape)
+            
             pred = model.result_deserialize(trt_output)
+
+            # print(len(pred))
+            # print(pred)
+
             img_metas = [dict(box_type_3d=LiDARInstance3DBoxes)]
             bbox_list = model.pts_bbox_head.get_bboxes(
                 pred, img_metas, rescale=True)
+
+            # print(bbox_list)
+
             bbox_results = [
                 bbox3d2result(bboxes, scores, labels)
                 for bboxes, scores, labels in bbox_list
@@ -204,8 +255,12 @@ def main():
             result_dict = {}
             result_dict['pts_bbox'] = bbox_results[0]
             outputs.append(result_dict)
+
+            # print(bbox_results[0])
+
             if args.eval:
                 results.append(bbox_results[0])
+
         torch.cuda.synchronize()
         elapsed = time.perf_counter() - start_time
 
